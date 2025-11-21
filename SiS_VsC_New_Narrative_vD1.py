@@ -34,8 +34,10 @@ MAX_ROWS_FOR_LLM = 50
 EMBEDDED_CENTRIQ_LOGO_BASE64 = """
 PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNTEyIDUxMiI+CgAg
 PGRlZnM+CgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJiZyIgeDE9IjAiIHgyPSIwIiB5MT0iMCIgeTI9IjEiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMGIwYzEwIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMxMTE4MjciIC8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjMyIiBmaWxsPSJ1cmwoI2JnKSIgLz4KICA8ZyBmaWxsPSJub25lIiBzdHJva2U9IiMwMEFFRUYiIHN0cm9rZS13aWR0aD0iMjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CiAgICA8cGF0aCBkPSJNMTI4IDE4Nmw2NCAzNiIgLz4KICAgIDxwYXRoIGQ9Ik0xOTIgMTUwbDY0LTM2IiAvPgogICAgPHBhdGggZD0iTTI1NiAxMTRsNjQgMzYiIC8+CiAgICA8cGF0aCBkPSJNMTkyIDIyMmw2NCAzNiIgLz4KICAgIDxwYXRoIGQ9Ik0yNTYgMjU4bDY0LTM2IiAvPgogIDwvZz4KICA8ZyBmaWxsPSIjMDBBRUVGIiBzdHJva2U9IiMwMEFFRUYiIHN0cm9rZS13aWR0aD0iMTAiPgogICAgPGNpcmNsZSBjeD0iMTI4IiBjeT0iMTg2IiByPSIzNCIgLz4KICAgIDxjaXJjbGUgY3g9IjE5MiIgY3k9IjE1MCIgcj0iMzQiIC8+CiAgICA8Y2lyY2xlIGN4PSIyNTYiIGN5PSIxMTQiIHI9IjM0IiAvPgogICAgPGNpcmNsZSBjeD0iMjU2IiBjeT0iMjU4IiByPSIzNCIgLz4KICAgIDxjaXJjbGUgY3g9IjMyMCIgY3k9IjIyMiIgcj0iMzQiIC8+CiAgPC9nPgogIDxnIGZvbnQtZmFtaWx5PSInTWFucm9wZScsICdTZWdvZSBVScnLCBBcmlhbCcgZm9udC1zaXplPSI5MiIgZm9udC13ZWlnaHQ9IjcwMCIgbGV0dGVyLXNwYWNpbmc9Ii0xIiA+CiAgICA8dGV4dCB4PSI5MiIgeT0iMzYwIiBmaWxsPSIjZmZmZmZmIj5DZW50cjwvdGV4dD4KICAgIDx0ZXh0IHg9IjMyMCIgeT0iMzYwIiBmaWxsPSIjMDBBRUVGIj5JUTwvdGV4dD4KICA8L2c+Cjwvc3ZnPg==
-""".strip()
+"""
 
+# Strip whitespace from the embedded asset to keep the data URI valid across platforms
+EMBEDDED_CENTRIQ_LOGO_BASE64 = "".join(EMBEDDED_CENTRIQ_LOGO_BASE64.split())
 
 def load_logo_base64():
     """Return the CentrIQ logo as base64, preferring the embedded SVG."""
@@ -674,7 +676,7 @@ def format_answer_html(answer: str) -> str:
 
     for ln in lines:
         stripped = ln.strip()
-        if stripped.startswith(("- ", "• ")):
+        if stripped.startswith(("- ", "• ", "* ")):
             bullet_buf.append(stripped[2:].strip())
         elif stripped:
             flush_bullets()
@@ -787,7 +789,7 @@ st.markdown(
             border-radius: 16px;
             padding: 0.75rem 1rem;
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
-            margin-bottom: 1rem;
+            margin-bottom: 0.35rem;
         }}
         .top-left {{
             display: flex;
@@ -819,7 +821,7 @@ st.markdown(
 
         /* Landing hero */
         .landing-container {{
-            min-height: 45vh;
+            min-height: 30vh;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -895,8 +897,8 @@ st.markdown(
 
         /* Reduce top padding, add breathing room overall */
         .main .block-container {{
-            padding-top: 0.1rem;
-            padding-bottom: 1.6rem;
+            padding-top: 0.15rem;
+            padding-bottom: 1.4rem;
             padding-left: 2.2rem;
             padding-right: 2.2rem;
         }}
@@ -938,13 +940,13 @@ st.markdown(
             box-shadow: 0 4px 12px rgba(0,0,0,0.04);
         }}
         .panel-left, .panel-right {{
-            height: calc(100vh - 235px);
-            min-height: 560px;
+            height: calc(100vh - 215px);
+            min-height: 540px;
         }}
         .panel-left {{
             display: flex;
             flex-direction: column;
-            gap: 0.55rem;
+            gap: 0.35rem;
         }}
         .chat-scroll {{
             flex: 1;
@@ -960,6 +962,9 @@ st.markdown(
             overflow-y: auto;
             padding-right: 0.35rem;
             margin-top: 0.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
         }}
         .tab-scroll {{
             max-height: calc(100vh - 360px);
@@ -984,7 +989,11 @@ st.markdown(
             background-color: #ffffff;
             color: {CENTRIC_DARK};
             box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
         }}
+        .panel-right > .details-panel {{ height: 100%; }}
 
         /* Chat bubbles */
         .bubble {{
@@ -1031,9 +1040,10 @@ st.markdown(
         }}
         .chip-row button {{
             cursor: pointer;
-            border: 1px solid {CENTRIQ_BLUE};
+            border: 1px solid {CENTRIQ_BLUE} !important;
             background: #ECFEFF;
             color: {CENTRIQ_BLUE};
+            border-radius: 999px !important;
         }}
         .chat-wrapper div[data-testid="stButton"] {{
             display: inline-block;
@@ -1041,7 +1051,7 @@ st.markdown(
             margin-bottom: 0.35rem;
         }}
         .chat-wrapper div[data-testid="stButton"] > button {{
-            border-radius: 999px;
+            border-radius: 999px !important;
             padding: 0.25rem 0.75rem;
             background: #ECFEFF;
             border: 1px solid {CENTRIQ_BLUE};
@@ -1058,9 +1068,11 @@ st.markdown(
         /* Keep the chat input docked near bottom of the viewport */
         .chat-bar {{
             position: sticky;
-            bottom: 0.4rem;
-            padding-top: 0.35rem;
-            padding-bottom: 0.35rem;
+            bottom: 0.2rem;
+            left: 0;
+            right: 0;
+            padding-top: 0.25rem;
+            padding-bottom: 0.25rem;
             background: #ffffff;
             z-index: 6;
         }}
