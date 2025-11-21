@@ -10,6 +10,11 @@ import streamlit as st
 import _snowflake
 from snowflake.snowpark.context import get_active_session
 
+try:
+    from centrIQ_logo_base64 import CENTRIQ_LOGO_BASE64 as LOGO_FALLBACK_BASE64
+except Exception:
+    LOGO_FALLBACK_BASE64 = ""
+
 # ==========================================================
 # CONFIG
 # ==========================================================
@@ -31,24 +36,70 @@ MAX_ROWS_FOR_LLM = 50
 # ==========================================================
 
 # Embedded CentrIQ logo (SVG) so the app remains fully single-file deployable.
+# Embedded CentrIQ logo (SVG) so the app remains fully single-file deployable.
 EMBEDDED_CENTRIQ_LOGO_BASE64 = """
 PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNTEyIDUxMiI+CgAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMCIgeDI9IjAiIHkxPSIwIiB5Mj0iMSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMwYjBjMTAiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzExMTgyNyIgLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iMzIiIGZpbGw9InVybCgjYmcpIiAvPgogIDxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwQUVFRiIgc3Ryb2tlLXdpZHRoPSIyNiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4KICAgIDxwYXRoIGQ9Ik0xMjggMTg2bDY0IDM2IiAvPgogICAgPHBhdGggZD0iTTE5MiAxNTBsNjQtMzYiIC8+CiAgICA8cGF0aCBkPSJNMjU2IDExNGw2NCAzNiIgLz4KICAgIDxwYXRoIGQ9Ik0xOTIgMjIybDY0IDM2IiAvPgogICAgPHBhdGggZD0iTTI1NiAyNThsNjQtMzYiIC8+CiAgPC9nPgogIDxnIGZpbGw9IiMwMEFFRUYiIHN0cm9rZT0iIzAwQUVFRiIgc3Ryb2tlLXdpZHRoPSIxMCI+CiAgICA8Y2lyY2xlIGN4PSIxMjgiIGN5PSIxODYiIHI9IjM0IiAvPgogICAgPGNpcmNsZSBjeD0iMTkyIiBjeT0iMTUwIiByPSMzNCIgLz4KICAgIDxjaXJjbGUgY3g9IjI1NiIgY3k9IjExNCIgcj0iMzQiIC8+CiAgICA8Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTgiIHI9IjM0IiAvPgogICAgPGNpcmNsZSBjeD0iMzIwIiBjeT0iMjIyIiByPSIzNCIgLz4KICA8L2c+CiAgPGcgZm9udC1mYW1pbHk9IidNYW5yb3BlJywgJ1NlZ29lIFVJJywgQXJpYWwiIGZvbnQtc2l6ZT0iOTIiIGZvbnQtd2VpZ2h0PSI3MDAiIGxldHRlci1zcGFjaW5nPSItMSIgPgogICAgPHRleHQgeD0iOTIiIHk9IjM2MCIgZmlsbD0iI2ZmZmZmZiI+Q2VudHI8L3RleHQ+CiAgICA8dGV4dCB4PSIzMjAiIHk9IjM2MCIgZmlsbD0iIzAwQUVFRiI+SVE8L3RleHQ+CiAgPC9nPgo8L3N2Zz4=
 """
 
-# Strip whitespace from the embedded asset to keep the data URI valid across platforms
+## Strip whitespace from the embedded asset to keep the data URI valid across platforms
 EMBEDDED_CENTRIQ_LOGO_BASE64 = "".join(EMBEDDED_CENTRIQ_LOGO_BASE64.split())
 
-def load_logo_base64():
-    """Return the CentrIQ logo as base64, preferring the embedded SVG."""
-    if EMBEDDED_CENTRIQ_LOGO_BASE64:
-        return EMBEDDED_CENTRIQ_LOGO_BASE64
+STAGE_LOGO_PATH = (
+    "snow://streamlit/CB_ASKCENTRIC_DB.CORTEX_SCHEMA.YP90S_178G0C7CJD/versions/live/image (7).png"
+)
 
-    logo_path = Path(__file__).parent / "centrIQ_logo.png"
-    if logo_path.exists():
-        try:
-            return base64.b64encode(logo_path.read_bytes()).decode("utf-8")
-        except Exception:
-            return ""
+
+def _validate_b64(data: str) -> Optional[str]:
+    """Return a clean base64 string if it decodes, otherwise None."""
+
+    if not data:
+        return None
+
+    try:
+        base64.b64decode(data)
+    except Exception:
+        return None
+
+    return data.strip()
+
+
+def _load_stage_logo_base64() -> Optional[str]:
+    """Try to read the staged logo file from Snowflake Streamlit storage."""
+
+    try:
+        session = get_active_session()
+    except Exception:
+        return None
+
+    try:
+        with session.file.get_stream(STAGE_LOGO_PATH) as f:
+            return base64.b64encode(f.read()).decode("utf-8")
+    except Exception:
+        return None
+
+
+def load_logo_base64():
+    """Return the CentrIQ logo as base64, preferring embedded and module fallbacks."""
+
+    stage_logo = _load_stage_logo_base64()
+
+    for candidate in (
+        stage_logo,
+        EMBEDDED_CENTRIQ_LOGO_BASE64,
+        LOGO_FALLBACK_BASE64,
+    ):
+        valid = _validate_b64(candidate)
+        if valid:
+            return valid
+
+    for local_name in ("image (7).png", "centrIQ_logo.png"):
+        logo_path = Path(__file__).parent / local_name
+        if logo_path.exists():
+            try:
+                return base64.b64encode(logo_path.read_bytes()).decode("utf-8")
+            except Exception:
+                continue
+
     return ""
 
 
@@ -896,6 +947,10 @@ st.markdown(
             margin: 0;
         }}
 
+        .top-ribbon {{
+            margin-bottom: 0.4rem;
+        }}
+
         /* Reduce top padding, add breathing room overall */
         .main .block-container {{
             padding-top: 0.05rem;
@@ -941,8 +996,8 @@ st.markdown(
             box-shadow: 0 4px 12px rgba(0,0,0,0.04);
         }}
         .panel-left, .panel-right {{
-            height: calc(100vh - 190px);
-            min-height: 500px;
+            height: calc(100vh - 160px);
+            min-height: 520px;
         }}
         .panel-left {{
             display: flex;
@@ -957,6 +1012,17 @@ st.markdown(
         .panel-right {{
             display: flex;
             flex-direction: column;
+            position: sticky;
+            top: 0;
+            align-self: flex-start;
+        }}
+        div[data-testid="stHorizontalBlock"] > div {{
+            align-items: flex-start !important;
+        }}
+        div[data-testid="column"] {{
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
         }}
         .details-scroll {{
             flex: 1;
@@ -966,6 +1032,7 @@ st.markdown(
             display: flex;
             flex-direction: column;
             gap: 0.45rem;
+            max-height: calc(100vh - 320px);
         }}
         .tab-scroll {{
             max-height: calc(100vh - 360px);
