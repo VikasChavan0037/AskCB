@@ -32,8 +32,7 @@ MAX_ROWS_FOR_LLM = 50
 
 # Embedded CentrIQ logo (SVG) so the app remains fully single-file deployable.
 EMBEDDED_CENTRIQ_LOGO_BASE64 = """
-PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNTEyIDUxMiI+CgAg
-PGRlZnM+CgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJiZyIgeDE9IjAiIHgyPSIwIiB5MT0iMCIgeTI9IjEiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMGIwYzEwIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMxMTE4MjciIC8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjMyIiBmaWxsPSJ1cmwoI2JnKSIgLz4KICA8ZyBmaWxsPSJub25lIiBzdHJva2U9IiMwMEFFRUYiIHN0cm9rZS13aWR0aD0iMjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CiAgICA8cGF0aCBkPSJNMTI4IDE4Nmw2NCAzNiIgLz4KICAgIDxwYXRoIGQ9Ik0xOTIgMTUwbDY0LTM2IiAvPgogICAgPHBhdGggZD0iTTI1NiAxMTRsNjQgMzYiIC8+CiAgICA8cGF0aCBkPSJNMTkyIDIyMmw2NCAzNiIgLz4KICAgIDxwYXRoIGQ9Ik0yNTYgMjU4bDY0LTM2IiAvPgogIDwvZz4KICA8ZyBmaWxsPSIjMDBBRUVGIiBzdHJva2U9IiMwMEFFRUYiIHN0cm9rZS13aWR0aD0iMTAiPgogICAgPGNpcmNsZSBjeD0iMTI4IiBjeT0iMTg2IiByPSIzNCIgLz4KICAgIDxjaXJjbGUgY3g9IjE5MiIgY3k9IjE1MCIgcj0iMzQiIC8+CiAgICA8Y2lyY2xlIGN4PSIyNTYiIGN5PSIxMTQiIHI9IjM0IiAvPgogICAgPGNpcmNsZSBjeD0iMjU2IiBjeT0iMjU4IiByPSIzNCIgLz4KICAgIDxjaXJjbGUgY3g9IjMyMCIgY3k9IjIyMiIgcj0iMzQiIC8+CiAgPC9nPgogIDxnIGZvbnQtZmFtaWx5PSInTWFucm9wZScsICdTZWdvZSBVScnLCBBcmlhbCcgZm9udC1zaXplPSI5MiIgZm9udC13ZWlnaHQ9IjcwMCIgbGV0dGVyLXNwYWNpbmc9Ii0xIiA+CiAgICA8dGV4dCB4PSI5MiIgeT0iMzYwIiBmaWxsPSIjZmZmZmZmIj5DZW50cjwvdGV4dD4KICAgIDx0ZXh0IHg9IjMyMCIgeT0iMzYwIiBmaWxsPSIjMDBBRUVGIj5JUTwvdGV4dD4KICA8L2c+Cjwvc3ZnPg==
+PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNTEyIDUxMiI+CgAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMCIgeDI9IjAiIHkxPSIwIiB5Mj0iMSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMwYjBjMTAiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzExMTgyNyIgLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iMzIiIGZpbGw9InVybCgjYmcpIiAvPgogIDxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwQUVFRiIgc3Ryb2tlLXdpZHRoPSIyNiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4KICAgIDxwYXRoIGQ9Ik0xMjggMTg2bDY0IDM2IiAvPgogICAgPHBhdGggZD0iTTE5MiAxNTBsNjQtMzYiIC8+CiAgICA8cGF0aCBkPSJNMjU2IDExNGw2NCAzNiIgLz4KICAgIDxwYXRoIGQ9Ik0xOTIgMjIybDY0IDM2IiAvPgogICAgPHBhdGggZD0iTTI1NiAyNThsNjQtMzYiIC8+CiAgPC9nPgogIDxnIGZpbGw9IiMwMEFFRUYiIHN0cm9rZT0iIzAwQUVFRiIgc3Ryb2tlLXdpZHRoPSIxMCI+CiAgICA8Y2lyY2xlIGN4PSIxMjgiIGN5PSIxODYiIHI9IjM0IiAvPgogICAgPGNpcmNsZSBjeD0iMTkyIiBjeT0iMTUwIiByPSMzNCIgLz4KICAgIDxjaXJjbGUgY3g9IjI1NiIgY3k9IjExNCIgcj0iMzQiIC8+CiAgICA8Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTgiIHI9IjM0IiAvPgogICAgPGNpcmNsZSBjeD0iMzIwIiBjeT0iMjIyIiByPSIzNCIgLz4KICA8L2c+CiAgPGcgZm9udC1mYW1pbHk9IidNYW5yb3BlJywgJ1NlZ29lIFVJJywgQXJpYWwiIGZvbnQtc2l6ZT0iOTIiIGZvbnQtd2VpZ2h0PSI3MDAiIGxldHRlci1zcGFjaW5nPSItMSIgPgogICAgPHRleHQgeD0iOTIiIHk9IjM2MCIgZmlsbD0iI2ZmZmZmZiI+Q2VudHI8L3RleHQ+CiAgICA8dGV4dCB4PSIzMjAiIHk9IjM2MCIgZmlsbD0iIzAwQUVFRiI+SVE8L3RleHQ+CiAgPC9nPgo8L3N2Zz4=
 """
 
 # Strip whitespace from the embedded asset to keep the data URI valid across platforms
@@ -676,11 +675,13 @@ def format_answer_html(answer: str) -> str:
 
     for ln in lines:
         stripped = ln.strip()
-        if stripped.startswith(("- ", "• ", "* ")):
-            bullet_buf.append(stripped[2:].strip())
-        elif stripped:
-            flush_bullets()
-            blocks.append(f"<p>{html.escape(stripped)}</p>")
+        if stripped:
+            if stripped[0] in {"-", "•", "*"}:
+                payload = stripped[1:].lstrip()
+                bullet_buf.append(payload if payload else stripped[0])
+            else:
+                flush_bullets()
+                blocks.append(f"<p>{html.escape(stripped)}</p>")
         else:
             flush_bullets()
     flush_bullets()
@@ -787,9 +788,9 @@ st.markdown(
             background: linear-gradient(90deg, #ffffff 0%, #f5f7fb 100%);
             border: 1px solid #e5e7eb;
             border-radius: 16px;
-            padding: 0.75rem 1rem;
+            padding: 0.65rem 1rem;
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
-            margin-bottom: 0.35rem;
+            margin-bottom: 0.15rem;
         }}
         .top-left {{
             display: flex;
@@ -821,7 +822,7 @@ st.markdown(
 
         /* Landing hero */
         .landing-container {{
-            min-height: 30vh;
+            min-height: 22vh;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -897,8 +898,8 @@ st.markdown(
 
         /* Reduce top padding, add breathing room overall */
         .main .block-container {{
-            padding-top: 0.15rem;
-            padding-bottom: 1.4rem;
+            padding-top: 0.05rem;
+            padding-bottom: 1.1rem;
             padding-left: 2.2rem;
             padding-right: 2.2rem;
         }}
@@ -940,8 +941,8 @@ st.markdown(
             box-shadow: 0 4px 12px rgba(0,0,0,0.04);
         }}
         .panel-left, .panel-right {{
-            height: calc(100vh - 215px);
-            min-height: 540px;
+            height: calc(100vh - 190px);
+            min-height: 500px;
         }}
         .panel-left {{
             display: flex;
@@ -994,6 +995,13 @@ st.markdown(
             flex-direction: column;
         }}
         .panel-right > .details-panel {{ height: 100%; }}
+
+        /* Stretch columns so the details card stays aligned with the chat area */
+        div[data-testid="column"] > div:first-child {{
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }}
 
         /* Chat bubbles */
         .bubble {{
