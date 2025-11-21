@@ -1,6 +1,9 @@
 import json
+import html
 import base64
 from pathlib import Path
+from functools import lru_cache
+
 import pandas as pd
 import streamlit as st
 import _snowflake
@@ -26,22 +29,18 @@ MAX_ROWS_FOR_LLM = 50
 # LOGO HANDLING
 # ==========================================================
 
+# Embedded CentrIQ logo (SVG) so the app remains fully single-file deployable.
+EMBEDDED_CENTRIQ_LOGO_BASE64 = """
+PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNTEyIDUxMiI+CgAg
+PGRlZnM+CgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJiZyIgeDE9IjAiIHgyPSIwIiB5MT0iMCIgeTI9IjEiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMGIwYzEwIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMxMTE4MjciIC8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjMyIiBmaWxsPSJ1cmwoI2JnKSIgLz4KICA8ZyBmaWxsPSJub25lIiBzdHJva2U9IiMwMEFFRUYiIHN0cm9rZS13aWR0aD0iMjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CiAgICA8cGF0aCBkPSJNMTI4IDE4Nmw2NCAzNiIgLz4KICAgIDxwYXRoIGQ9Ik0xOTIgMTUwbDY0LTM2IiAvPgogICAgPHBhdGggZD0iTTI1NiAxMTRsNjQgMzYiIC8+CiAgICA8cGF0aCBkPSJNMTkyIDIyMmw2NCAzNiIgLz4KICAgIDxwYXRoIGQ9Ik0yNTYgMjU4bDY0LTM2IiAvPgogIDwvZz4KICA8ZyBmaWxsPSIjMDBBRUVGIiBzdHJva2U9IiMwMEFFRUYiIHN0cm9rZS13aWR0aD0iMTAiPgogICAgPGNpcmNsZSBjeD0iMTI4IiBjeT0iMTg2IiByPSIzNCIgLz4KICAgIDxjaXJjbGUgY3g9IjE5MiIgY3k9IjE1MCIgcj0iMzQiIC8+CiAgICA8Y2lyY2xlIGN4PSIyNTYiIGN5PSIxMTQiIHI9IjM0IiAvPgogICAgPGNpcmNsZSBjeD0iMjU2IiBjeT0iMjU4IiByPSIzNCIgLz4KICAgIDxjaXJjbGUgY3g9IjMyMCIgY3k9IjIyMiIgcj0iMzQiIC8+CiAgPC9nPgogIDxnIGZvbnQtZmFtaWx5PSInTWFucm9wZScsICdTZWdvZSBVScnLCBBcmlhbCcgZm9udC1zaXplPSI5MiIgZm9udC13ZWlnaHQ9IjcwMCIgbGV0dGVyLXNwYWNpbmc9Ii0xIiA+CiAgICA8dGV4dCB4PSI5MiIgeT0iMzYwIiBmaWxsPSIjZmZmZmZmIj5DZW50cjwvdGV4dD4KICAgIDx0ZXh0IHg9IjMyMCIgeT0iMzYwIiBmaWxsPSIjMDBBRUVGIj5JUTwvdGV4dD4KICA8L2c+Cjwvc3ZnPg==
+""".strip()
+
 
 def load_logo_base64():
-    """
-    Try to load embedded base64 (if module exists), otherwise read the PNG.
-    Returns a base64 string or empty string on failure.
-    """
-    # Attempt embedded module if available
-    try:
-        from centrIQ_logo_base64 import CENTRIQ_LOGO_BASE64 as EMBED_B64  # type: ignore
+    """Return the CentrIQ logo as base64, preferring the embedded SVG."""
+    if EMBEDDED_CENTRIQ_LOGO_BASE64:
+        return EMBEDDED_CENTRIQ_LOGO_BASE64
 
-        if isinstance(EMBED_B64, str) and EMBED_B64.strip():
-            return EMBED_B64.strip()
-    except Exception:
-        pass
-
-    # Fallback: read the PNG directly
     logo_path = Path(__file__).parent / "centrIQ_logo.png"
     if logo_path.exists():
         try:
@@ -658,6 +657,37 @@ def simple_summary(question, df: pd.DataFrame):
 # TURN RENDERING (PERSISTENCE + SUGGESTIONS)
 # ==========================================================
 
+
+def format_answer_html(answer: str) -> str:
+    """Render a plain-text/markdown-ish answer into HTML with bullet support."""
+    lines = [ln.rstrip() for ln in answer.splitlines()]
+    blocks = []
+    bullet_buf = []
+
+    def flush_bullets():
+        nonlocal bullet_buf
+        if bullet_buf:
+            items = "".join(f"<li>{html.escape(item)}</li>" for item in bullet_buf)
+            blocks.append(f"<ul>{items}</ul>")
+            bullet_buf = []
+
+    for ln in lines:
+        stripped = ln.strip()
+        if stripped.startswith(("- ", "• ")):
+            bullet_buf.append(stripped[2:].strip())
+        elif stripped:
+            flush_bullets()
+            blocks.append(f"<p>{html.escape(stripped)}</p>")
+        else:
+            flush_bullets()
+    flush_bullets()
+
+    if not blocks:
+        return html.escape(answer)
+
+    return "".join(blocks)
+
+
 def render_turn(turn, session, turn_index):
     """
     Render a single historic turn (user + assistant) from stored state,
@@ -672,190 +702,413 @@ def render_turn(turn, session, turn_index):
     chart_cfg = turn.get("chart_cfg")
     context = turn.get("context")
 
+    assistant_avatar = data_uri_logo() or "💬"
+
     # USER
-    with st.chat_message("user"):
-        st.markdown(question)
+    with st.chat_message("user", avatar=_user_avatar()):
+        st.markdown(f"<div class='bubble bubble-user'>{question}</div>", unsafe_allow_html=True)
 
     # ASSISTANT
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar=assistant_avatar):
 
         # Narrative
         if answer:
-            st.markdown("<div class='answer-card'>", unsafe_allow_html=True)
-            st.markdown(answer)
-            st.markdown("</div>", unsafe_allow_html=True)
+            answer_html = format_answer_html(answer)
+            st.markdown(
+                f"<div class='bubble bubble-assistant'>{answer_html}</div>",
+                unsafe_allow_html=True,
+            )
 
         # Suggested follow-up questions
         suggestions = suggest_followups(context)
         if suggestions:
-            cols = st.columns(len(suggestions))
-            for i, (col, s) in enumerate(zip(cols, suggestions)):
-                with col:
-                    if st.button(s, key=f"suggest_{turn_index}_{i}"):
-                        st.session_state["pending_question"] = s
-                        st.session_state["pending_is_followup"] = True
-                        st.rerun()
+            st.markdown("<div class='chip-row'>", unsafe_allow_html=True)
+            for i, s in enumerate(suggestions):
+                if st.button(s, key=f"suggest_{turn_index}_{i}"):
+                    st.session_state["pending_question"] = s
+                    st.session_state["pending_is_followup"] = True
+                    st.session_state["view_mode"] = "Conversation"
+                    st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ==========================================================
 # STREAMLIT APP
 # ==========================================================
 
-st.set_page_config(page_title="CentrIQ NLQ Insights", layout="wide")
+st.set_page_config(
+    page_title="CentrIQ — NLQ Insights Assistant",
+    layout="wide",
+    page_icon="💬",
+)
 
 # Brand palette + font
-CENTRIC_NAVY = "#002A5C"
-CENTRIC_DARK = "#101010"
-CENTRIQ_BLUE = "#00AEEF"
+CENTRIC_NAVY = "#002A5C"  # approx Centric signature navy
+CENTRIC_DARK = "#101010"  # Cod Gray from brand tools
+CENTRIQ_BLUE = "#00AEEF"  # approx from CentrIQ logo
+
+
+@lru_cache(maxsize=1)
+def _user_avatar():
+    return (
+        "data:image/svg+xml;base64,"
+        + base64.b64encode(
+            """
+            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+              <circle cx="32" cy="32" r="30" fill="#002A5C"/>
+              <text x="32" y="40" font-family="Arial, sans-serif" font-size="28" fill="#ffffff" text-anchor="middle">U</text>
+            </svg>
+            """
+            .strip()
+            .encode("utf-8")
+        ).decode("ascii")
+    )
+
 
 st.markdown(
     f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
-        :root {{
-            --centric-navy: {CENTRIC_NAVY};
-            --centric-dark: {CENTRIC_DARK};
-            --centriq-blue: {CENTRIQ_BLUE};
-        }}
+
         body, p, li, div {{
-            color: var(--centric-dark);
+            color: {CENTRIC_DARK};
             font-family: 'Manrope', system-ui, -apple-system, sans-serif;
         }}
+
+        /* Elevated top ribbon */
+        .top-ribbon {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            background: linear-gradient(90deg, #ffffff 0%, #f5f7fb 100%);
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 0.75rem 1rem;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+            margin-bottom: 1rem;
+        }}
+        .top-left {{
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }}
+        .top-logo {{
+            width: 60px;
+            height: 60px;
+            border-radius: 14px;
+            border: 1px solid #e5e7eb;
+            object-fit: contain;
+            background: #ffffff;
+            padding: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }}
+        .top-logo-placeholder {{
+            width: 60px;
+            height: 60px;
+            border-radius: 14px;
+            border: 1px solid #e5e7eb;
+            background: #eef2f7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: {CENTRIC_NAVY};
+        }}
+
+        /* Landing hero */
+        .landing-container {{
+            min-height: 45vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.9rem;
+            text-align: center;
+            padding-top: 0.05rem;
+        }}
+        .landing-logo {{
+            width: 110px;
+            height: 110px;
+            border-radius: 999px;
+            border: 1px solid #e5e7eb;
+            object-fit: contain;
+            background: #ffffff;
+            padding: 14px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        }}
+        .landing-title {{
+            font-size: 1.6rem;
+            font-weight: 600;
+            color: #6b6c7a;
+            letter-spacing: 0.02em;
+        }}
+        .landing-sub {{
+            font-size: 0.98rem;
+            color: #6b6c7a;
+            max-width: 760px;
+            line-height: 1.5;
+        }}
+        .landing-chip-row {{
+            margin-top: 0.75rem;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.35rem;
+        }}
+        /* Landing input: border around the field itself */
+        div[data-testid="stTextInput"]:has(input#landing_query) {{
+            width: min(86vw, 960px);
+            margin: 0 auto;
+            padding: 0;
+            border-radius: 12px;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+        }}
+        div[data-testid="stTextInput"]:has(input#landing_query) > div > div {{
+            padding: 0 !important;
+            background: transparent !important;
+        }}
+        input#landing_query {{
+            width: 100%;
+            border: 2px solid {CENTRIC_NAVY} !important;
+            box-shadow: none !important;
+            padding: 0.9rem 1rem !important;
+            font-size: 1rem !important;
+            color: #6b6c7a !important;
+            background: #f2f4f8 !important;
+            border-radius: 12px !important;
+        }}
+        .top-title {{
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: {CENTRIC_NAVY};
+            margin-bottom: 0.15rem;
+        }}
+        .top-subtitle {{
+            font-size: 0.95rem;
+            color: #4b5563;
+            margin: 0;
+        }}
+
+        /* Reduce top padding, add breathing room overall */
         .main .block-container {{
-            padding-top: 0.5rem;
-            padding-bottom: 2rem;
+            padding-top: 0.1rem;
+            padding-bottom: 1.6rem;
             padding-left: 2.2rem;
             padding-right: 2.2rem;
         }}
-        .hero-wrapper {{
-            text-align: center;
-            margin-top: 0.5rem;
-            margin-bottom: 1.5rem;
-        }}
-        .hero-logo {{
-            width: 96px;
-            height: 96px;
-            border-radius: 50%;
-            box-shadow: 0 10px 35px rgba(0, 42, 92, 0.14);
-            margin-bottom: 0.75rem;
-        }}
-        .hero-title {{
-            font-size: 1.75rem;
+
+        /* Header title + subtitle */
+        .centriq-title {{
+            font-size: 1.5rem;
             font-weight: 700;
-            color: var(--centric-navy);
-            margin-bottom: 0.4rem;
+            color: {CENTRIC_NAVY};
+            margin-bottom: 0.15rem;
         }}
-        .hero-subtitle {{
-            font-size: 0.98rem;
-            color: #5f6470;
-            margin-bottom: 1rem;
+        .centriq-subtitle {{
+            font-size: 0.90rem;
+            color: #6B7280;
+            margin-top: 0.1rem;
         }}
-        .hero-input-shell {{
-            max-width: 960px;
-            margin: 0 auto;
-            background: #f4f6fa;
-            border: 1.6px solid var(--centric-navy);
+
+        /* Section headings inside columns */
+        .section-title {{
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: {CENTRIC_NAVY};
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.15rem;
+            margin-top: 0.35rem;
+        }}
+
+        /* Chat area cards */
+        .chat-wrapper {{
             border-radius: 16px;
-            padding: 0.6rem 0.9rem;
-            box-shadow: 0 8px 28px rgba(0, 42, 92, 0.08);
+            border: none;
+            padding: 0.4rem 0.9rem 0.75rem 0.9rem;
+            background-color: #ffffff;
+            color: {CENTRIC_DARK};
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04);
         }}
-        .hero-input-shell [data-testid="stTextInput"] > div > div {{
-            border: none !important;
-            background: transparent !important;
-            box-shadow: none !important;
-            padding: 0 !important;
+        .panel-left, .panel-right {{
+            height: calc(100vh - 235px);
+            min-height: 560px;
         }}
-        .hero-input-shell input {{
-            border: none !important;
-            background: transparent !important;
-            font-size: 1.02rem;
-            color: var(--centric-dark);
-            padding: 0.75rem 0.2rem !important;
+        .panel-left {{
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
         }}
-        /* Hide the form submit button; Enter submits */
-        form button[type="submit"] {{
-            visibility: hidden !important;
-            height: 0 !important;
-            padding: 0 !important;
-            margin: 0 !important;
-        }}
-        /* Chat input stickiness */
-        div[data-testid="stChatInput"] {{
-            position: sticky;
-            bottom: 0.2rem;
-            z-index: 10;
-            background: white;
-            padding-top: 0.25rem;
-            padding-bottom: 0.25rem;
-        }}
-        div[data-testid="stChatInput"] textarea {{
-            border: 1.4px solid var(--centric-navy);
-            border-radius: 12px;
-            background: #f4f6fa;
-            padding: 0.85rem 1rem;
-        }}
-        /* Tabs accent */
-        .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {{
-            border-bottom: 2px solid var(--centric-navy);
-        }}
-        .details-pane [data-baseweb="tab-panel"] {{
-            max-height: 55vh;
+        .chat-scroll {{
+            flex: 1;
             overflow-y: auto;
+            padding-right: 0.35rem;
         }}
-        .details-pane .stTabs [data-baseweb="tab-panel"] {{
-            max-height: 65vh;
+        .panel-right {{
+            display: flex;
+            flex-direction: column;
+        }}
+        .details-scroll {{
+            flex: 1;
             overflow-y: auto;
+            padding-right: 0.35rem;
+            margin-top: 0.25rem;
         }}
-        .details-pane .stTabs [data-baseweb="tab-panel"] > div {{
-            max-height: 60vh;
+        .tab-scroll {{
+            max-height: calc(100vh - 360px);
             overflow-y: auto;
+            padding-right: 0.35rem;
         }}
-        .details-pane-outer {{
-            max-height: 78vh;
-            overflow-y: auto;
-            padding-right: 0.25rem;
+        /* Trim Streamlit chat container padding */
+        div[data-testid="stChatMessage"] {{
+            padding: 0.1rem 0;
+            background: transparent;
+            box-shadow: none;
         }}
-        .col-pane {{
-            max-height: 78vh;
-            overflow-y: auto;
-            padding-right: 0.25rem;
+        div[data-testid="stChatMessage"] p {{
+            margin: 0;
         }}
-        /* Chips */
-        .chip {{
-            display: inline-block;
-            padding: 0.3rem 0.7rem;
-            border-radius: 999px;
-            border: 1px solid var(--centriq-blue);
-            color: var(--centriq-blue);
-            font-size: 0.82rem;
-            margin-right: 0.35rem;
-            margin-bottom: 0.35rem;
-            background-color: #ecfeff;
+
+        /* Right details panel styling */
+        .details-panel {{
+            border-radius: 16px;
+            border: none;
+            padding: 0.6rem 0.5rem 0.9rem 0.5rem;
+            background-color: #ffffff;
+            color: {CENTRIC_DARK};
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04);
         }}
-        /* Right column scroll if long */
-        .details-pane {{
-            max-height: 78vh;
-            overflow-y: auto;
-            padding-right: 0.2rem;
-        }}
-        .answer-card {{
-            background: #f1f7ff;
-            border: 1px solid #d7e6ff;
+
+        /* Chat bubbles */
+        .bubble {{
             border-radius: 14px;
             padding: 0.85rem 1rem;
-            width: 100%;
-            box-sizing: border-box;
-            margin-bottom: 0.4rem;
-            overflow: hidden;
+            max-width: 100%;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
         }}
-        .answer-card p {{ margin-top: 0.1rem; margin-bottom: 0.35rem; }}
-        .answer-card ul {{ margin-top: 0.1rem; margin-bottom: 0.35rem; padding-left: 1.2rem; }}
-        div[data-testid="stChatMessage"] {{
-            background: transparent !important;
+        .bubble-user {{
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            align-self: flex-end;
+        }}
+        .bubble-assistant {{
+            background: rgba(0, 174, 239, 0.10);
+            border: 1px solid rgba(0, 174, 239, 0.35);
+            align-self: flex-start;
+        }}
+
+        /* Follow-up chips */
+        .chip-row {{
+            margin-top: 0.75rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.2rem;
+        }}
+        .chip, .chip-row button {{
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            border: 1px solid {CENTRIQ_BLUE};
+            color: {CENTRIQ_BLUE};
+            font-size: 0.78rem;
+            margin-right: 0.35rem;
+            margin-bottom: 0.35rem;
+            background-color: #ECFEFF;
+            transition: all 0.15s ease;
             box-shadow: none !important;
-            border: none !important;
-            padding-left: 0 !important;
-            padding-right: 0 !important;
+        }}
+        .chip:hover, .chip-row button:hover {{
+            background-color: {CENTRIQ_BLUE};
+            color: #ffffff;
+            box-shadow: 0 6px 16px rgba(0, 174, 239, 0.25);
+        }}
+        .chip-row button {{
+            cursor: pointer;
+            border: 1px solid {CENTRIQ_BLUE};
+            background: #ECFEFF;
+            color: {CENTRIQ_BLUE};
+        }}
+        .chat-wrapper div[data-testid="stButton"] {{
+            display: inline-block;
+            margin-right: 0.35rem;
+            margin-bottom: 0.35rem;
+        }}
+        .chat-wrapper div[data-testid="stButton"] > button {{
+            border-radius: 999px;
+            padding: 0.25rem 0.75rem;
+            background: #ECFEFF;
+            border: 1px solid {CENTRIQ_BLUE};
+            color: {CENTRIQ_BLUE};
+            font-size: 0.78rem;
+            box-shadow: none;
+            height: auto;
+        }}
+        .chat-wrapper div[data-testid="stButton"] > button:hover {{
+            background-color: {CENTRIQ_BLUE};
+            color: #ffffff;
+        }}
+
+        /* Keep the chat input docked near bottom of the viewport */
+        .chat-bar {{
+            position: sticky;
+            bottom: 0.4rem;
+            padding-top: 0.35rem;
+            padding-bottom: 0.35rem;
+            background: #ffffff;
+            z-index: 6;
+        }}
+        div[data-testid="stTextInput"]:has(input#chat_query) {{
+            width: 100%;
+            margin: 0;
+        }}
+        div[data-testid="stTextInput"]:has(input#chat_query) > div > div {{
+            padding: 0 !important;
+            background: transparent !important;
+        }}
+        input#chat_query {{
+            width: 100%;
+            border: 2px solid {CENTRIC_NAVY} !important;
+            box-shadow: none !important;
+            padding: 0.9rem 1rem !important;
+            font-size: 1rem !important;
+            color: #6b6c7a !important;
+            background: #f2f4f8 !important;
+            border-radius: 12px !important;
+        }}
+
+        /* Reduce spacing of preview toggle */
+        div[data-testid="stRadio"] {{
+            margin-top: 0.2rem;
+            margin-bottom: 0.2rem;
+            padding: 0;
+        }}
+
+        /* Expander headers accent */
+        [data-testid="stExpander"] > summary {{
+            background: #f7f9fc;
+            border: 1px solid #e5e7eb;
+            border-left: 4px solid {CENTRIC_NAVY};
+            border-radius: 12px;
+            padding: 0.6rem 0.9rem;
+            font-weight: 600;
+            color: {CENTRIC_NAVY};
+        }}
+        [data-testid="stExpander"][open] > summary {{
+            background: #eef4fb;
+        }}
+        [data-testid="stExpander"] {{
+            margin-bottom: 0.45rem;
+        }}
+
+        /* Focus states */
+        button, input, textarea {{
+            outline-color: {CENTRIQ_BLUE};
         }}
     </style>
     """,
@@ -880,97 +1133,112 @@ if "pending_is_followup" not in st.session_state:
     st.session_state["pending_is_followup"] = False
 if "view_mode" not in st.session_state:
     st.session_state["view_mode"] = "Landing"
+if "chat_query" not in st.session_state:
+    st.session_state["chat_query"] = ""
+
+
+def _start_conversation_from_landing():
+    landing_q = st.session_state.get("landing_query", "").strip()
+    if landing_q:
+        st.session_state["pending_question"] = landing_q
+        st.session_state["pending_is_followup"] = False
+        st.session_state["view_mode"] = "Conversation"
+        st.session_state["landing_query"] = ""
+
+
+def _submit_chat_input():
+    text = st.session_state.get("chat_query", "").strip()
+    if text:
+        st.session_state["pending_question"] = text
+        st.session_state["pending_is_followup"] = False
+        st.session_state["view_mode"] = "Conversation"
+        st.session_state["chat_query"] = ""
 
 # Sidebar: reset + debug toggle
 with st.sidebar:
+    view_mode = st.radio(
+        "Preview state",
+        ["Landing", "Conversation"],
+        index=0 if st.session_state["view_mode"] == "Landing" else 1,
+    )
+    st.session_state["view_mode"] = view_mode
+
     if st.button("Reset conversation"):
         st.session_state["turns"] = []
         st.session_state["thread_id"] = None
         st.session_state["parent_message_id"] = 0
         st.session_state["pending_question"] = None
         st.session_state["pending_is_followup"] = False
+        st.session_state["view_mode"] = "Landing"
         st.rerun()
 
     show_debug_tab = st.checkbox("Show debug tab", value=False)
 
 
 def data_uri_logo():
-    return f"data:image/png;base64,{CENTRIQ_LOGO_BASE64}"
+    return f"data:image/svg+xml;base64,{CENTRIQ_LOGO_BASE64}" if CENTRIQ_LOGO_BASE64 else ""
+
+
+logo_src = data_uri_logo()
+top_ribbon_html = f"""
+<div class="top-ribbon">
+    <div class="top-left">
+        {f'<img class="top-logo" src="{logo_src}" alt="CentrIQ logo" />' if logo_src else '<div class="top-logo-placeholder">CI</div>'}
+        <div>
+            <div class="top-title">CentrIQ NLQ Insights</div>
+            <div class="top-subtitle">Conversational answers for marketing &amp; sales KPIs</div>
+        </div>
+    </div>
+</div>
+"""
 
 
 # Landing state
 if st.session_state["view_mode"] == "Landing":
-    logo_src = data_uri_logo()
     st.markdown(
         f"""
-        <div class="hero-wrapper">
-            {"<img src='" + logo_src + "' class='hero-logo' />" if logo_src else ""}
-            <div class="hero-title">CentrIQ NLQ Insights</div>
-            <div class="hero-subtitle">
-                Start a conversation to uncover hidden insights in your marketing and sales data.
+        <div class="landing-container">
+            {f'<img class="landing-logo" src="{logo_src}" alt="CentrIQ logo" />' if logo_src else '<div class="top-logo-placeholder">CI</div>'}
+            <div class="landing-title">Start a conversation to uncover hidden insights in your marketing data</div>
+            <div class="landing-sub">
+                Ask about your marketing &amp; sales KPIs. I’ll summarize, show the chart, surface the SQL, and provide the table.
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    sample_questions = [
-        "Top brands by MQLs",
-        "Weekly trend vs last year",
-        "Conversions by device",
-        "Top countries by revenue",
-    ]
-
-    st.markdown('<div class="hero-input-shell">', unsafe_allow_html=True)
-    landing_q = st.text_input(
-        "Start a conversation",
-        placeholder="Start a conversation...",
-        key="landing_query",
+    st.text_input(
+        "Start a conversation…",
+        placeholder="Start a conversation…",
         label_visibility="collapsed",
+        key="landing_query",
+        on_change=_start_conversation_from_landing,
     )
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    chip_clicked = None
-    chips_cols = st.columns(len(sample_questions))
-    for chip_label, col in zip(sample_questions, chips_cols):
-        with col:
-            if st.button(chip_label, key=f"landing_chip_{chip_label}"):
-                chip_clicked = chip_label
-
-    if chip_clicked or (landing_q and landing_q.strip()):
-        picked = chip_clicked or landing_q.strip()
-        st.session_state["pending_question"] = picked
-        st.session_state["pending_is_followup"] = False
-        st.session_state["view_mode"] = "Conversation"
-        st.rerun()
-
+    st.markdown(
+        """
+        <div class="landing-chip-row">
+            <span class="chip">Top brands by MQLs</span>
+            <span class="chip">Weekly trend vs last year</span>
+            <span class="chip">Conversions by device</span>
+            <span class="chip">Top countries by revenue</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.stop()
 
-# Capture chat input early so it appears at the bottom
-chat_value = st.chat_input("Ask a question about your Centric sales data...")
+# Conversation layout
+st.markdown(top_ribbon_html, unsafe_allow_html=True)
 
-# Compact branded header for conversation view
-conv_logo_src = data_uri_logo()
-st.markdown(
-    f"""
-    <div class="hero-wrapper" style="margin-top: 0rem; margin-bottom: 0.6rem;">
-        {"<img src='" + conv_logo_src + "' class='hero-logo' style='width:72px; height:72px;' />" if conv_logo_src else ""}
-        <div class="hero-title" style="margin-bottom: 0.15rem;">CentrIQ NLQ Insights</div>
-        <div class="hero-subtitle">Conversational answers for marketing and sales KPIs.</div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# Two-column layout
-left_col, right_col = st.columns([1.7, 1.0], gap="large")
+left_col, right_col = st.columns([1.9, 1.4], gap="large")
 latest_turn = st.session_state["turns"][-1] if st.session_state["turns"] else None
 
 with left_col:
-    st.markdown("#### Conversation")
-    st.markdown('<div class="col-pane">', unsafe_allow_html=True)
+    st.markdown('<div class="panel-left">', unsafe_allow_html=True)
+    st.markdown('<div class="chat-scroll">', unsafe_allow_html=True)
+    st.markdown('<div class="chat-wrapper">', unsafe_allow_html=True)
 
-    # Render previous turns
     for idx, t in enumerate(st.session_state["turns"]):
         render_turn(t, session, idx)
 
@@ -985,9 +1253,6 @@ with left_col:
         is_followup = pending_is_followup
         st.session_state["pending_question"] = None
         st.session_state["pending_is_followup"] = False
-    elif chat_value:
-        user_q = chat_value.strip()
-        is_followup = False
 
     if user_q:
         if st.session_state["thread_id"] is None:
@@ -997,10 +1262,10 @@ with left_col:
         thread_id = st.session_state["thread_id"]
         parent_id = st.session_state["parent_message_id"]
 
-        with st.chat_message("user"):
-            st.markdown(user_q)
+        with st.chat_message("user", avatar=_user_avatar()):
+            st.markdown(f"<div class='bubble bubble-user'>{user_q}</div>", unsafe_allow_html=True)
 
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=logo_src or "💬"):
             last_context = st.session_state["turns"][-1].get("context") if st.session_state["turns"] else None
 
             if last_context:
@@ -1119,28 +1384,33 @@ with left_col:
                     narrative = agent_answer or simple_summary(user_q, df)
                     turn["answer"] = narrative
 
-        if turn["answer"]:
-            st.markdown('<div class="answer-card">', unsafe_allow_html=True)
-            st.markdown(turn["answer"])
-            st.markdown('</div>', unsafe_allow_html=True)
+            if turn["answer"]:
+                answer_html = format_answer_html(turn["answer"])
+                st.markdown(
+                    f"<div class='bubble bubble-assistant'>{answer_html}</div>",
+                    unsafe_allow_html=True,
+                )
 
-            if show_debug_tab and 'events' in locals() and events:
-                with st.expander("Debug (events)"):
-                    st.markdown("#### Raw Cortex events")
-                    if err:
-                        st.error(err)
-                    else:
-                        st.json(events)
-                    st.markdown("#### Extracted SQL")
-                    st.code(sql or "None", language="sql")
-                    st.markdown("#### Rewritten question sent to agent")
-                    st.write(rewritten_q)
-                    if df is not None:
-                        st.markdown("#### Result sample (head)")
-                        st.dataframe(df.head(), use_container_width=True)
+                if show_debug_tab and "events" in locals() and events:
+                    with st.expander("Debug (events)"):
+                        st.markdown("#### Raw Cortex events")
+                        if err:
+                            st.error(err)
+                        else:
+                            st.json(events)
+                        st.markdown("#### Extracted SQL")
+                        st.code(sql or "None", language="sql")
+                        st.markdown("#### Rewritten question sent to agent")
+                        st.write(rewritten_q)
+                        if df is not None:
+                            st.markdown("#### Result sample (head)")
+                            st.dataframe(df.head(), use_container_width=True)
 
-            st.session_state["turns"].append(turn)
-            latest_turn = turn
+                st.session_state["turns"].append(turn)
+                latest_turn = turn
+
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 # Determine latest turn for details panel
@@ -1148,9 +1418,10 @@ if st.session_state["turns"]:
     latest_turn = st.session_state["turns"][-1]
 
 with right_col:
-    st.markdown("#### Details")
-    st.markdown('<div class="details-pane-outer">', unsafe_allow_html=True)
-    st.markdown('<div class="details-pane">', unsafe_allow_html=True)
+    st.markdown("<div class='panel-right'>", unsafe_allow_html=True)
+    st.markdown("<div class='details-panel'>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>Details</div>", unsafe_allow_html=True)
+    st.markdown("<div class='details-scroll'>", unsafe_allow_html=True)
     if st.session_state["turns"]:
         for idx, t in enumerate(st.session_state["turns"], start=1):
             q_label = t.get("question", "Question")
@@ -1179,37 +1450,56 @@ with right_col:
                 )
 
             viz_tab, think_tab, sql_tab, table_tab = st.tabs(
-                ["Visuals", "Thinking", "SQL Query", "Data Table"]
+                ["📊 Visuals", "🧠 Thinking", "🧮 SQL Query", "📄 Data Table"]
             )
 
             with viz_tab:
+                st.markdown("<div class='tab-scroll'>", unsafe_allow_html=True)
                 if l_tab_chart_df is not None and l_chart_cfg:
                     render_chart(l_tab_chart_df, l_chart_cfg.get("chart_type"), st)
                 else:
                     st.caption("No chart available.")
+                st.markdown("</div>", unsafe_allow_html=True)
 
             with think_tab:
+                st.markdown("<div class='tab-scroll'>", unsafe_allow_html=True)
                 if l_thinking:
                     st.markdown(l_thinking)
                 else:
                     st.caption("No thinking available.")
+                st.markdown("</div>", unsafe_allow_html=True)
 
             with sql_tab:
+                st.markdown("<div class='tab-scroll'>", unsafe_allow_html=True)
                 if l_sql:
                     st.code(l_sql, language="sql")
                 else:
                     st.caption("No SQL generated.")
+                st.markdown("</div>", unsafe_allow_html=True)
 
             with table_tab:
+                st.markdown("<div class='tab-scroll'>", unsafe_allow_html=True)
                 if l_df is not None and not l_df.empty:
                     st.dataframe(l_df, use_container_width=True)
                 elif l_sql:
                     st.caption("No data returned.")
                 else:
                     st.caption("No data available.")
+                st.markdown("</div>", unsafe_allow_html=True)
 
             st.divider()
     else:
         st.caption("No answers yet. Ask a question to see details.")
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown("<div class='chat-bar'>", unsafe_allow_html=True)
+st.text_input(
+    "Ask a new question…",
+    placeholder="e.g., How do total MQLs compare to last year?",
+    key="chat_query",
+    label_visibility="collapsed",
+    on_change=_submit_chat_input,
+)
+st.markdown("</div>", unsafe_allow_html=True)
