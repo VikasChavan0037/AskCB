@@ -3,6 +3,7 @@ import html
 import base64
 from pathlib import Path
 from functools import lru_cache
+from typing import Optional
 
 import pandas as pd
 import streamlit as st
@@ -629,7 +630,7 @@ def render_chart(df: pd.DataFrame, chart_type, container):
         container.bar_chart(df)
 
 
-def simple_summary(question, df: pd.DataFrame):
+def simple_summary(question: str, df: Optional[pd.DataFrame]) -> str:
     """Basic bullet-style summary when LLM narrative isn't available."""
     if df is None:
         return f"No data available for: **{question}**."
